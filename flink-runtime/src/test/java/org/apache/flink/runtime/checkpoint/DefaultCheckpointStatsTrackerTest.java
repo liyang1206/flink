@@ -814,6 +814,8 @@ class DefaultCheckpointStatsTrackerTest {
                                         .NUMBER_OF_COMPLETED_CHECKPOINTS_METRIC,
                                 DefaultCheckpointStatsTracker.NUMBER_OF_FAILED_CHECKPOINTS_METRIC,
                                 DefaultCheckpointStatsTracker
+                                        .NUMBER_OF_CONSECUTIVE_FAILED_CHECKPOINTS_METRIC,
+                                DefaultCheckpointStatsTracker
                                         .LATEST_RESTORED_CHECKPOINT_TIMESTAMP_METRIC,
                                 DefaultCheckpointStatsTracker
                                         .LATEST_COMPLETED_CHECKPOINT_SIZE_METRIC,
@@ -832,7 +834,7 @@ class DefaultCheckpointStatsTrackerTest {
                                 DefaultCheckpointStatsTracker.LATEST_COMPLETED_CHECKPOINT_ID_METRIC,
                                 DefaultCheckpointStatsTracker
                                         .LATEST_CHECKPOINT_COMPLETED_TIMESTAMP));
-        assertThat(registeredGaugeNames).hasSize(14);
+        assertThat(registeredGaugeNames).hasSize(15);
     }
 
     /**
@@ -861,7 +863,7 @@ class DefaultCheckpointStatsTrackerTest {
         CheckpointStatsTracker stats = new DefaultCheckpointStatsTracker(0, metricGroup);
 
         // Make sure to adjust this test if metrics are added/removed
-        assertThat(registeredGauges).hasSize(14);
+        assertThat(registeredGauges).hasSize(15);
 
         // Check initial values
         Gauge<Long> numCheckpoints =
@@ -1062,6 +1064,42 @@ class DefaultCheckpointStatsTrackerTest {
 
         // Verify external path is "n/a", because internal checkpoint won't generate external path.
         assertThat(latestCompletedExternalPath.getValue()).isEqualTo("n/a");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void testConsecutiveFailedCheckpointsGauge() {
+        final Map<String, Gauge<?>> registeredGauges = new HashMap<>();
+        JobManagerJobMetricGroup metricGroup =
+                new UnregisteredMetricGroups.UnregisteredJobManagerJobMetricGroup() {
+                    @Override
+                    public <T, G extends Gauge<T>> G gauge(String name, G gauge) {
+                        registeredGauges.put(name, gauge);
+                        return gauge;
+                    }
+                };
+
+        DefaultCheckpointStatsTracker tracker = new DefaultCheckpointStatsTracker(10, metricGroup);
+
+        Gauge<Integer> consecutive =
+                (Gauge<Integer>)
+                        registeredGauges.get(
+                                DefaultCheckpointStatsTracker
+                                        .NUMBER_OF_CONSECUTIVE_FAILED_CHECKPOINTS_METRIC);
+
+        assertThat(consecutive.getValue()).isZero();
+
+        tracker.updateConsecutiveFailedCheckpoints(1);
+        assertThat(consecutive.getValue()).isEqualTo(1);
+
+        tracker.updateConsecutiveFailedCheckpoints(2);
+        assertThat(consecutive.getValue()).isEqualTo(2);
+
+        tracker.updateConsecutiveFailedCheckpoints(5);
+        assertThat(consecutive.getValue()).isEqualTo(5);
+
+        tracker.updateConsecutiveFailedCheckpoints(0);
+        assertThat(consecutive.getValue()).isZero();
     }
 
     // ------------------------------------------------------------------------

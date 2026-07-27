@@ -31,6 +31,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.function.IntConsumer;
 
 import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkNotNull;
@@ -49,9 +50,17 @@ public class CheckpointFailureManager {
     private final FailJobCallback failureCallback;
     private final AtomicInteger continuousFailureCounter;
     private final Set<Long> countedCheckpointIds;
+    private final IntConsumer continuousFailureListener;
     private long lastSucceededCheckpointId = Long.MIN_VALUE;
 
     public CheckpointFailureManager(int tolerableCpFailureNumber, FailJobCallback failureCallback) {
+        this(tolerableCpFailureNumber, failureCallback, value -> {});
+    }
+
+    public CheckpointFailureManager(
+            int tolerableCpFailureNumber,
+            FailJobCallback failureCallback,
+            IntConsumer continuousFailureListener) {
         checkArgument(
                 tolerableCpFailureNumber >= 0,
                 "The tolerable checkpoint failure number is illegal, "
@@ -60,6 +69,7 @@ public class CheckpointFailureManager {
         this.continuousFailureCounter = new AtomicInteger(0);
         this.failureCallback = checkNotNull(failureCallback);
         this.countedCheckpointIds = ConcurrentHashMap.newKeySet();
+        this.continuousFailureListener = checkNotNull(continuousFailureListener);
     }
 
     /**
@@ -254,7 +264,7 @@ public class CheckpointFailureManager {
                 // we should make sure one checkpoint only be counted once
                 if (checkpointId == UNKNOWN_CHECKPOINT_ID
                         || countedCheckpointIds.add(checkpointId)) {
-                    continuousFailureCounter.incrementAndGet();
+                    continuousFailureListener.accept(continuousFailureCounter.incrementAndGet());
                 }
 
                 break;
@@ -281,6 +291,7 @@ public class CheckpointFailureManager {
     private void clearCount() {
         continuousFailureCounter.set(0);
         countedCheckpointIds.clear();
+        continuousFailureListener.accept(0);
     }
 
     private static boolean isPreFlightFailure(final Throwable cause) {

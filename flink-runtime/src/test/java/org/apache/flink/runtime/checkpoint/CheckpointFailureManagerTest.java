@@ -21,6 +21,8 @@ import org.apache.flink.runtime.executiongraph.ExecutionAttemptID;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
 import static org.apache.flink.runtime.checkpoint.CheckpointFailureReason.CHECKPOINT_EXPIRED;
 import static org.apache.flink.runtime.checkpoint.CheckpointProperties.forCheckpoint;
 import static org.apache.flink.runtime.checkpoint.CheckpointRetentionPolicy.NEVER_RETAIN_AFTER_TERMINATION;
@@ -147,6 +149,50 @@ class CheckpointFailureManagerTest {
                 new CheckpointException(CheckpointFailureReason.CHECKPOINT_DECLINED),
                 2);
         assertThat(callback.getInvokeCounter()).isZero();
+    }
+
+    @Test
+    void testContinuousFailureListenerNotifiedOnIncrementAndReset() {
+        TestFailJobCallback callback = new TestFailJobCallback();
+        AtomicInteger observed = new AtomicInteger(-1);
+        CheckpointFailureManager failureManager =
+                new CheckpointFailureManager(3, callback, observed::set);
+        CheckpointProperties checkpointProperties = forCheckpoint(NEVER_RETAIN_AFTER_TERMINATION);
+
+        assertThat(observed.get()).isEqualTo(-1);
+
+        failureManager.handleJobLevelCheckpointException(
+                checkpointProperties, new CheckpointException(CHECKPOINT_EXPIRED), 1L);
+        assertThat(observed.get()).isEqualTo(1);
+
+        failureManager.handleJobLevelCheckpointException(
+                checkpointProperties, new CheckpointException(CHECKPOINT_EXPIRED), 2L);
+        assertThat(observed.get()).isEqualTo(2);
+
+        failureManager.handleCheckpointSuccess(2L);
+        assertThat(observed.get()).isZero();
+
+        failureManager.handleJobLevelCheckpointException(
+                checkpointProperties, new CheckpointException(CHECKPOINT_EXPIRED), 3L);
+        assertThat(observed.get()).isEqualTo(1);
+    }
+
+    @Test
+    void testContinuousFailureListenerResetOnFailoverThreshold() {
+        TestFailJobCallback callback = new TestFailJobCallback();
+        AtomicInteger observed = new AtomicInteger(-1);
+        CheckpointFailureManager failureManager =
+                new CheckpointFailureManager(1, callback, observed::set);
+        CheckpointProperties checkpointProperties = forCheckpoint(NEVER_RETAIN_AFTER_TERMINATION);
+
+        failureManager.handleJobLevelCheckpointException(
+                checkpointProperties, new CheckpointException(CHECKPOINT_EXPIRED), 1L);
+        assertThat(observed.get()).isEqualTo(1);
+
+        failureManager.handleJobLevelCheckpointException(
+                checkpointProperties, new CheckpointException(CHECKPOINT_EXPIRED), 2L);
+        assertThat(callback.getInvokeCounter()).isEqualTo(1);
+        assertThat(observed.get()).isZero();
     }
 
     /** A failure handler callback for testing. */

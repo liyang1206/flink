@@ -96,6 +96,16 @@ public interface CheckpointStatsTracker {
     void reportFailedCheckpointsWithoutInProgress();
 
     /**
+     * Updates the "consecutive failed checkpoints" gauge to the given value. Called by {@link
+     * CheckpointFailureManager} whenever its internal continuous failure counter changes, so the
+     * exposed metric stays in lockstep with the value that drives {@code
+     * execution.checkpointing.tolerable-failed-checkpoints}.
+     *
+     * @param value the new consecutive failed checkpoint count (0 on reset).
+     */
+    void updateConsecutiveFailedCheckpoints(int value);
+
+    /**
      * Creates a new snapshot of the available stats.
      *
      * @return The latest statistics snapshot.

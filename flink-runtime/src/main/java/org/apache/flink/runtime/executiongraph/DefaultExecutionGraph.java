@@ -506,7 +506,8 @@ public class DefaultExecutionGraph implements ExecutionGraph, InternalExecutionG
                                                         failGlobalIfExecutionIsStillRunning(
                                                                 cause, failingTask));
                             }
-                        });
+                        },
+                        checkpointStatsTracker::updateConsecutiveFailedCheckpoints);
 
         checkState(checkpointCoordinatorTimer == null);
 

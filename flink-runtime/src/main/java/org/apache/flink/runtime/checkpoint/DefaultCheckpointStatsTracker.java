@@ -176,6 +176,12 @@ public class DefaultCheckpointStatsTracker implements CheckpointStatsTracker {
     @Nullable private volatile CompletedCheckpointStats latestCompletedCheckpoint;
 
     /**
+     * Latest value of {@link CheckpointFailureManager}'s continuous failure counter, kept in sync
+     * via {@link #updateConsecutiveFailedCheckpoints(int)} so it can be exposed as a gauge.
+     */
+    private volatile int consecutiveFailedCheckpoints = 0;
+
+    /**
      * Creates a new checkpoint stats tracker.
      *
      * @param numRememberedCheckpoints Maximum number of checkpoints to remember, including in
@@ -535,6 +541,11 @@ public class DefaultCheckpointStatsTracker implements CheckpointStatsTracker {
     }
 
     @Override
+    public void updateConsecutiveFailedCheckpoints(int value) {
+        consecutiveFailedCheckpoints = value;
+    }
+
+    @Override
     public PendingCheckpointStats getPendingCheckpointStats(long checkpointId) {
         statsReadWriteLock.lock();
         try {
@@ -651,6 +662,10 @@ public class DefaultCheckpointStatsTracker implements CheckpointStatsTracker {
     static final String NUMBER_OF_FAILED_CHECKPOINTS_METRIC = "numberOfFailedCheckpoints";
 
     @VisibleForTesting
+    static final String NUMBER_OF_CONSECUTIVE_FAILED_CHECKPOINTS_METRIC =
+            "numberOfConsecutiveFailedCheckpoints";
+
+    @VisibleForTesting
     static final String LATEST_RESTORED_CHECKPOINT_TIMESTAMP_METRIC =
             "lastCheckpointRestoreTimestamp";
 
@@ -697,6 +712,9 @@ public class DefaultCheckpointStatsTracker implements CheckpointStatsTracker {
         metricGroup.gauge(
                 NUMBER_OF_COMPLETED_CHECKPOINTS_METRIC, new CompletedCheckpointsCounter());
         metricGroup.gauge(NUMBER_OF_FAILED_CHECKPOINTS_METRIC, new FailedCheckpointsCounter());
+        metricGroup.gauge(
+                NUMBER_OF_CONSECUTIVE_FAILED_CHECKPOINTS_METRIC,
+                (Gauge<Integer>) () -> consecutiveFailedCheckpoints);
         metricGroup.gauge(
                 LATEST_RESTORED_CHECKPOINT_TIMESTAMP_METRIC,
                 new LatestRestoredCheckpointTimestampGauge());
